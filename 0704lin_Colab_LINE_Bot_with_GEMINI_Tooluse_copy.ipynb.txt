@@ -1,0 +1,410 @@
+﻿{
+  "cells": [
+    {
+      "cell_type": "code",
+      "execution_count": 1,
+      "metadata": {
+        "id": "9Ahw4x5hMkN_",
+        "outputId": "48f44eb6-0115-4f4b-b206-2575ddfd471a",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        }
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\u001b[?25l   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m0.0/818.9 kB\u001b[0m \u001b[31m?\u001b[0m eta \u001b[36m-:--:--\u001b[0m\r\u001b[2K   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m818.9/818.9 kB\u001b[0m \u001b[31m43.7 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\n",
+            "\u001b[?25h\u001b[?25l   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m0.0/165.6 kB\u001b[0m \u001b[31m?\u001b[0m eta \u001b[36m-:--:--\u001b[0m\r\u001b[2K   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m165.6/165.6 kB\u001b[0m \u001b[31m16.9 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\n",
+            "\u001b[?25h"
+          ]
+        }
+      ],
+      "source": [
+        "!pip install Flask pyngrok line-bot-sdk requests --quiet\n",
+        "!pip install google-genai --quiet"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 2,
+      "metadata": {
+        "id": "9ngnvFgWMlli"
+      },
+      "outputs": [],
+      "source": [
+        "from google.colab import userdata\n",
+        "\n",
+        "ngrok_authtoken = userdata.get('NGROK_AUTHTOKEN')\n",
+        "line_channel_access_token = userdata.get('LINE_CHANNEL_ACCESS_TOKEN')\n",
+        "line_channel_secret = userdata.get('LINE_CHANNEL_SECRET')\n",
+        "gemini_api_key = userdata.get('GEMINI_API_KEY')\n",
+        "port = 5051\n"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 3,
+      "metadata": {
+        "id": "yQSj-lVgNMm3"
+      },
+      "outputs": [],
+      "source": [
+        "import os\n",
+        "from pyngrok import ngrok"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 13,
+      "metadata": {
+        "id": "a3yngmFY5jos"
+      },
+      "outputs": [],
+      "source": [
+        "ngrok.kill()"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 14,
+      "metadata": {
+        "id": "bFF8Q-4QNP2m",
+        "outputId": "22476f2e-520a-4819-e457-e71f3e3c883e",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        }
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Ngrok URL: https://subcritical-readily-mahalia.ngrok-free.dev\n",
+            "✅ LINE Webhook URL 已自動更新為：https://subcritical-readily-mahalia.ngrok-free.dev\n"
+          ]
+        },
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "True"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 14
+        }
+      ],
+      "source": [
+        "import requests\n",
+        "\n",
+        "ngrok.set_auth_token(ngrok_authtoken)\n",
+        "tunnel = ngrok.connect(5051, name=\"linebot_tunnel\")\n",
+        "webhook_url = tunnel.public_url\n",
+        "\n",
+        "print(f\"Ngrok URL: {webhook_url}\")\n",
+        "\n",
+        "# 自動更新 LINE Webhook URL\n",
+        "def update_line_webhook(webhook_url):\n",
+        "    \"\"\"使用 LINE Messaging API 更新 Webhook URL\"\"\"\n",
+        "    url = \"https://api.line.me/v2/bot/channel/webhook/endpoint\"\n",
+        "    headers = {\n",
+        "        \"Authorization\": f\"Bearer {line_channel_access_token}\",\n",
+        "        \"Content-Type\": \"application/json\"\n",
+        "    }\n",
+        "    data = {\n",
+        "        \"endpoint\": webhook_url\n",
+        "    }\n",
+        "\n",
+        "    response = requests.put(url, headers=headers, json=data)\n",
+        "\n",
+        "    if response.status_code == 200:\n",
+        "        print(f\"✅ LINE Webhook URL 已自動更新為：{webhook_url}\")\n",
+        "        return True\n",
+        "    else:\n",
+        "        print(f\"❌ 更新失敗：{response.status_code} - {response.text}\")\n",
+        "        return False\n",
+        "\n",
+        "# 執行更新\n",
+        "update_line_webhook(webhook_url)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 15,
+      "metadata": {
+        "id": "wJY8NK_RMjEW"
+      },
+      "outputs": [],
+      "source": [
+        "from google import genai\n",
+        "from google.genai.types import Tool, GenerateContentConfig, GoogleSearch\n",
+        "\n",
+        "# === 初始化 Google Gemini ===\n",
+        "client = genai.Client(api_key=gemini_api_key)\n",
+        "\n",
+        "google_search_tool = Tool(\n",
+        "   google_search=GoogleSearch()\n",
+        ")\n",
+        "\n",
+        "chat = client.chats.create(\n",
+        "    model=\"gemini-2.5-flash\",\n",
+        "    config=GenerateContentConfig(\n",
+        "        system_instruction=\"你是一個中文的AI助手，請用繁體中文回答\",\n",
+        "        tools=[google_search_tool],\n",
+        "        response_modalities=[\"TEXT\"],\n",
+        "    )\n",
+        ")"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 16,
+      "metadata": {
+        "id": "v7-5DU6RuIc0"
+      },
+      "outputs": [],
+      "source": [
+        "def stateful_query(payload):\n",
+        "    response = chat.send_message(message=payload)\n",
+        "    return response.text"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 9,
+      "metadata": {
+        "id": "f-oeubJyMjEW",
+        "outputId": "3b1de3c4-5aa4-43ae-a262-91e2b40fcbf6",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        }
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "手錶是一種佩戴在手腕上的計時工具，用來顯示時間，有些還具備日期、鬧鐘、計時或智慧功能。它不僅實用，也是展現個人風格與品味的配件，廣泛應用於日常生活、運動與正式場合。 
+\n"
+          ]
+        }
+      ],
+      "source": [
+        "result = stateful_query(\"AI 介紹一下手錶（一百字內）\")\n",
+        "print(result)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 10,
+      "metadata": {
+        "id": "0CslONd2uIc1",
+        "outputId": "ce3aa6bc-0af9-4df3-9c3c-a068b1cf9d3c",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        }
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [嚴格來說，**手錶沒有單一的發明者**。 不過，**最早有紀錄的手錶**通常被認為是 **百達翡麗（Patek Philippe）**在 **1868 年**製作的，當時是為一位貴族女性設計的。 手錶是由懷錶逐步演變而來，經過多人改良與發展，才成為今天的樣貌。
+一、世界上第一只手錶是誰發明的？
+👉 彼得·亨萊因（Peter Henlein）— 德國鐘錶匠
+• 年代：約 1505 年
+• 地點：德國紐倫堡
+• 被公認為：「手錶的發明者」
+他製作出第一批可攜式彈簧鐘錶，可以掛在身上或放入口袋，這是手錶與懷錶的起源。
+⚠️ 但那時候還不是「戴在手上」，而是掛在脖子或放口袋。
+
+二、第一只「真正戴在手上」的手錶是誰做的？
+👉 亞伯拉罕-路易·寶璣（Abraham-Louis Breguet）
+• 1806 年
+• 為 法國皇后約瑟芬 訂製
+• 被認為是：世界第一只真正的腕錶（Wristwatch）
+👉 重點：
+最早的手錶是為「女性」設計的飾品，不是工具。
+
+三、那男生什麼時候開始戴手錶？
+👉 一戰時期（1914–1918）
+因為：
+• 士兵需要快速看時間
+• 懷錶拿出來太慢
+• 於是改成綁在手上
+👉 從此：
+手錶正式從「女性飾品」→「男性實用工具」
+這是手錶普及的關鍵轉折點。
+
+四、重要里程碑整理
+時間事件1505彼得·亨萊因做出第一只可攜式鐘錶1806寶璣製作第一只腕錶1914一戰，手錶在軍中普及1950s機械錶巔峰時代1970s石英錶革命（日本精工 Seiko）2010s智慧手錶出現（Apple Watch 等）
+            "
+          ]
+        }
+      ],
+      "source": [
+        "result2 = stateful_query(\"AI 手錶是誰發明？？\")\n",
+        "print(result2)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 17,
+      "metadata": {
+        "id": "jdG0_hVBMjEX",
+        "outputId": "5a1c5470-edd7-4230-bcec-73c4d894d930",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        }
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            " * Serving Flask app '__main__'\n",
+            " * Debug mode: off\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "INFO:werkzeug:\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n",
+            " * Running on http://127.0.0.1:5051\n",
+            "INFO:werkzeug:\u001b[33mPress CTRL+C to quit\u001b[0m\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "BODY:  {\"destination\":\"U76cbdc862e10d4bc5006a4f38d10ef71\",\"events\":[{\"type\":\"message\",\"message\":{\"type\":\"text\",\"id\":\"595031214542029295\",\"quoteToken\":\"kYrolt9CT2V379PaQGYCwB7_SYOlL5h-POUXKoTxDViibkw4caJq9VkupSC39OoOLyS155VGw3SXvHbkhHHUBQuFd-Yd9OiVMK2LnJc65xQtNIoYTx7p_hDLEUY4Rb0U4b37Obn3j1u5wi5tc4dd1Q\",\"markAsReadToken\":\"W8dE4-eu3v4hWvmm0Q2Uv8vH6s5GGGDuR_Y_CQXfGU10W2_BjGASc6nME1DedfKsWu9ZnoXovo8i1AXJsxxWejTtBwWaN6rlMVJqQcbX4JVWZ3f3KoyHlpq1kGKcSh5csX2zrVNyjZQlNZucTeGT-7S3mFnHBXvTC40AULEVjVvCWn8XT33pDt6Ura2o-SPQiJBHEtHPkpVjLPsXPPS_5w\",\"text\":\"AI 介紹一下三星電子(50字以內)\"},\"webhookEventId\":\"01KE3H0E4H69HX4KX1WA1NZX1N\",\"deliveryContext\":{\"isRedelivery\":false},\"timestamp\":1767497545845,\"source\":{\"type\":\"user\",\"userId\":\"U1dd9c39a8d91da6846f0716244d3eece\"},\"replyToken\":\"831e3701a51f4ce6b6194294346c123e\",\"mode\":\"active\"}]}\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "INFO:werkzeug:127.0.0.1 - - [04/Jan/2026 03:32:29] \"POST / HTTP/1.1\" 200 -\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "BODY:  {\"destination\":\"U76cbdc862e10d4bc5006a4f38d10ef71\",\"events\":[{\"type\":\"message\",\"message\":{\"type\":\"text\",\"id\":\"595031239070057198\",\"quoteToken\":\"jICVnYC4YxOdJld3vOyGokqoDFD2dRvi34knD2A362JkupHp2gl_KGTGLDODRw9_IElu6uB6NfcdA7fX5M2kQzAPUCTeJY4KITmVtxDLV-RwYjbUe3_Wo7RbrQ8n-0jx-dyG-bbrTCgKAoVuYviykQ\",\"markAsReadToken\":\"PLKjqKxBlTKJ1iOm-PWRFi9sZKOkT6xkwW_YWfaqoQJOXol74ajbfPLSxiIfTysfeel6I0cHxDuTvM0vF0DqsMxp4MQ7ABC2Q1nUJF5SgJu20qcIgr0GOwBWCq0NPQU2fyZ6HTZgNlilbpNhjAfODFDsQwkFa8HCVDx0npH0LNbkbwrGaW2Xe1FPLp45vZXS1UM2cR3F64ESGFdCwarTLg\",\"text\":\"AI 目前最新旗艦手機是什麼？\"},\"webhookEventId\":\"01KE3H0WZGFP958PDTNR08G6GQ\",\"deliveryContext\":{\"isRedelivery\":false},\"timestamp\":1767497560565,\"source\":{\"type\":\"user\",\"userId\":\"U1dd9c39a8d91da6846f0716244d3eece\"},\"replyToken\":\"ec66acffd55b490dbc2c1420bc22b8e5\",\"mode\":\"active\"}]}\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "INFO:werkzeug:127.0.0.1 - - [04/Jan/2026 03:32:46] \"POST / HTTP/1.1\" 200 -\n",
+            "WARNING:pyngrok.process.ngrok:t=2026-01-04T03:33:20+0000 lvl=warn msg=\"Stopping forwarder\" name=linebot_tunnel acceptErr=\"failed to accept connection: Listener closed\"\n",
+            "WARNING:pyngrok.process.ngrok:t=2026-01-04T03:33:20+0000 lvl=warn msg=\"Error restarting forwarder\" name=linebot_tunnel err=\"failed to start tunnel: session closed\"\n"
+          ]
+        }
+      ],
+      "source": [
+        "from flask import Flask, request, abort\n",
+        "\n",
+        "from linebot.v3 import (\n",
+        "    WebhookHandler\n",
+        ")\n",
+        "from linebot.v3.exceptions import (\n",
+        "    InvalidSignatureError\n",
+        ")\n",
+        "from linebot.v3.messaging import (\n",
+        "    Configuration,\n",
+        "    ApiClient,\n",
+        "    MessagingApi,\n",
+        "    ReplyMessageRequest,\n",
+        "    TextMessage,\n",
+        ")\n",
+        "from linebot.v3.webhooks import (\n",
+        "    MessageEvent,\n",
+        "    TextMessageContent,\n",
+        ")\n",
+        "\n",
+        "app = Flask(__name__)\n",
+        "\n",
+        "configuration = Configuration(access_token=line_channel_access_token)\n",
+        "handler = WebhookHandler(line_channel_secret)\n",
+        "\n",
+        "\n",
+        "@app.route(\"/\", methods=['POST'])\n",
+        "def callback():\n",
+        "    # get X-Line-Signature header value\n",
+        "    signature = request.headers['X-Line-Signature']\n",
+        "\n",
+        "    # get request body as text\n",
+        "    body = request.get_data(as_text=True)\n",
+        "    print(\"BODY: \", body)\n",
+        "    app.logger.info(\"Request body: \" + body)\n",
+        "\n",
+        "    # handle webhook body\n",
+        "    try:\n",
+        "        handler.handle(body, signature)\n",
+        "    except InvalidSignatureError:\n",
+        "        app.logger.info(\"Invalid signature. Please check your channel access token/channel secret.\")\n",
+        "        abort(400)\n",
+        "\n",
+        "    return 'OK'\n",
+        "\n",
+        "\n",
+        "@handler.add(MessageEvent, message=TextMessageContent)\n",
+        "def handle_message(event):\n",
+        "    text = event.message.text\n",
+        "    with ApiClient(configuration) as api_client:\n",
+        "        line_bot_api = MessagingApi(api_client)\n",
+        "        if text.startswith('AI '):\n",
+        "            prompt = text[3:]\n",
+        "            reply_text = stateful_query(prompt)\n",
+        "            line_bot_api.reply_message_with_http_info(\n",
+        "                ReplyMessageRequest(\n",
+        "                    reply_token=event.reply_token,\n",
+        "                    messages=[TextMessage(text=reply_text)]\n",
+        "                )\n",
+        "            )\n",
+        "\n",
+        "        else:\n",
+        "            line_bot_api.reply_message_with_http_info(\n",
+        "                ReplyMessageRequest(\n",
+        "                    reply_token=event.reply_token,\n",
+        "                    messages=[TextMessage(text=event.message.text),\n",
+        "                        TextMessage(text=event.message.text)]\n",
+        "                )\n",
+        "            )\n",
+        "\n",
+        "if __name__ == \"__main__\":\n",
+        "    app.run(port=port)"
+      ]
+    }
+  ],
+  "metadata": {
+    "colab": {
+      "provenance": []
+    },
+    "kernelspec": {
+      "display_name": "linebot",
+      "language": "python",
+      "name": "python3"
+    },
+    "language_info": {
+      "codemirror_mode": {
+        "name": "ipython",
+        "version": 3
+      },
+      "file_extension": ".py",
+      "mimetype": "text/x-python",
+      "name": "python",
+      "nbconvert_exporter": "python",
+      "pygments_lexer": "ipython3",
+      "version": "3.12.3"
+    }
+  },
+  "nbformat": 4,
+  "nbformat_minor": 0
+}
